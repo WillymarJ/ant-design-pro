@@ -1,4 +1,4 @@
-import { queryNotices } from '../services/api';
+import { queryNotices } from '@/services/api';
 
 export default {
   namespace: 'global',
@@ -6,31 +6,63 @@ export default {
   state: {
     collapsed: false,
     notices: [],
-    fetchingNotices: false,
   },
 
   effects: {
-    *fetchNotices(_, { call, put }) {
-      yield put({
-        type: 'changeNoticeLoading',
-        payload: true,
-      });
+    *fetchNotices(_, { call, put, select }) {
       const data = yield call(queryNotices);
       yield put({
         type: 'saveNotices',
         payload: data,
       });
-    },
-    *clearNotices({ payload }, { put, select }) {
-      const count = yield select(state => state.global.notices.length);
+      const unreadCount = yield select(
+        state => state.global.notices.filter(item => !item.read).length
+      );
       yield put({
         type: 'user/changeNotifyCount',
-        payload: count,
+        payload: {
+          totalCount: data.length,
+          unreadCount,
+        },
       });
-
+    },
+    *clearNotices({ payload }, { put, select }) {
       yield put({
         type: 'saveClearedNotices',
         payload,
+      });
+      const count = yield select(state => state.global.notices.length);
+      const unreadCount = yield select(
+        state => state.global.notices.filter(item => !item.read).length
+      );
+      yield put({
+        type: 'user/changeNotifyCount',
+        payload: {
+          totalCount: count,
+          unreadCount,
+        },
+      });
+    },
+    *changeNoticeReadState({ payload }, { put, select }) {
+      const notices = yield select(state =>
+        state.global.notices.map(item => {
+          const notice = { ...item };
+          if (notice.id === payload) {
+            notice.read = true;
+          }
+          return notice;
+        })
+      );
+      yield put({
+        type: 'saveNotices',
+        payload: notices,
+      });
+      yield put({
+        type: 'user/changeNotifyCount',
+        payload: {
+          totalCount: notices.length,
+          unreadCount: notices.filter(item => !item.read).length,
+        },
       });
     },
   },
@@ -46,19 +78,12 @@ export default {
       return {
         ...state,
         notices: payload,
-        fetchingNotices: false,
       };
     },
     saveClearedNotices(state, { payload }) {
       return {
         ...state,
         notices: state.notices.filter(item => item.type !== payload),
-      };
-    },
-    changeNoticeLoading(state, { payload }) {
-      return {
-        ...state,
-        fetchingNotices: payload,
       };
     },
   },
